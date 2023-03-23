@@ -18,6 +18,8 @@ def extract_letter_links(letters_url: str, base_url: str) -> dict:
             and the link as the value
     """
 
+    print('Extracting links to annual shareholder letters...')
+
     # Download contents of annual Berkshire Hathaway shareholder letters page
     res = requests.get(letters_url,
                        headers={"User-Agent":
@@ -35,17 +37,38 @@ def extract_letter_links(letters_url: str, base_url: str) -> dict:
         if letter_url.endswith('html') or letter_url.endswith('pdf'):
             links[letter_url[:4]] = f'{base_url}/{letter_url}'
 
+    # Loop through the first links and check for second-level PDF links
+    for year, link in tqdm(links.items()):
+
+        # Download and parse each HTML webpage
+        res = requests.get(link,
+                           headers={"User-Agent":
+                               "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        soup = BeautifulSoup(res.text, features='html.parser')
+
+        # Check for pages with in-page PDF links (years 1998 to 2003)
+        if 'Adobe Acrobat' in soup.text:
+            # Find all secondary links
+            in_page_links = soup.find_all('a')
+            # Update the landing page link to the in-page PDF letter link
+            for in_page_link in in_page_links:
+                if 'pdf' in in_page_link["href"].lower():
+                    pdf_link = f'{base_url}/{in_page_link["href"]}'
+                    links[year] = pdf_link
+
     return links
 
 
-def download_letters(links: dict) -> None:
+def download_letters(links: dict, base_url: str) -> None:
     """Download all of Warren Buffet's annual letters to the shareholders as
     a TXT file
 
     Args:
-        links (dict): Full links to each years annual letter, with the year as the key
-            and the link as the value
+        links (dict): Full links to each years annual letter, with the year
+             as the key and the link as the value
     """
+
+    print('Downloading shareholder letters...')
 
     # Loop through all links for each year
     for year, link in tqdm(links.items()):
@@ -96,4 +119,4 @@ if __name__ == '__main__':
     BASE_URL = "https://www.berkshirehathaway.com/letters"
 
     letter_links = extract_letter_links(LETTERS_URL, BASE_URL)
-    download_letters(letter_links)
+    download_letters(letter_links, BASE_URL)
